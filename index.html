@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
-  <title>OilMesh | Rafineri, Liman ve Boru Hattı Haritası</title>
+  <title> OilMesh </title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -16,16 +16,15 @@
     body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
     #map { width: 100vw; height: 100vh; box-sizing: border-box; }
 
-    /* HEADER STYLES */
     .main-header {
         background-color: #ffffff;
         padding: 0 20px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        position: fixed; /* Sabit durması için */
+        position: fixed; 
         top: 0;
         left: 0;
         width: 100%;
-        z-index: 1001; /* Diğer elementlerin üzerinde kalması için */
+        z-index: 1001; 
         box-sizing: border-box;
     }
     .header-content {
@@ -54,18 +53,18 @@
     .main-header nav a:hover { background-color: #f0f0f0; }
     .main-header nav a.active { font-weight: bold; color: #0056b3; }
     
-    /* Haritanın menünün altında başlaması için */
+
     #map {
         padding-top: 60px; 
     }
     
-    /* === YENİ KURAL: Header'ın altındaki harita kontrollerini aşağı itmek için === */
-    .leaflet-top {
-        top: 70px; /* 60px header + 10px boşluk */
-    }
-    /* === YENİ KURAL BİTTİ === */
 
-    /* HEADER STYLES END */
+    .leaflet-top {
+        top: 70px; 
+    }
+
+
+
     
     .interactive-icon { transition: transform 0.2s ease-out, filter 0.2s ease-out; cursor: pointer; }
     .interactive-icon:hover { transform: translateY(-6px) scale(1.15); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); }
@@ -336,9 +335,7 @@ async function initMap() {
     
     document.getElementById('reset-filters-btn').addEventListener('click', () => { document.querySelectorAll('.country-checkbox:checked, .company-checkbox:checked').forEach(cb => cb.checked = false); slider.noUiSlider.set([minCapacity, maxCapacity]); applyFilters(); document.getElementById('filter-panel').style.display = 'none'; });
 
-    // =========================================================================
-    // === FİLTRELEME FONKSİYONU GÜNCELLENDİ (SORUN 1 VE 2'NİN ÇÖZÜMÜ) ===
-    // =========================================================================
+
     function applyFilters() {
         const selectedCountries = [...document.querySelectorAll('.country-checkbox:checked')].map(cb => cb.value);
         const selectedCompanies = [...document.querySelectorAll('.company-checkbox:checked')].map(cb => cb.value);
@@ -349,7 +346,7 @@ async function initMap() {
             return companies.some(company => new RegExp(`\\b${company.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i').test(ownerString));
         };
 
-        // 1. Önce rafinerileri ve limanları kendi özelliklerine göre filtrele
+
         const filteredRefineries = refineryData.features.filter(f => 
             (selectedCountries.length === 0 || selectedCountries.includes(f.properties.country)) &&
             (f.properties.capacity_bpd >= capacityRange[0] && f.properties.capacity_bpd <= capacityRange[1]) &&
@@ -359,15 +356,14 @@ async function initMap() {
             selectedCountries.length === 0 || selectedCountries.includes(f.properties.country)
         );
 
-        // Rafineri ve Liman katmanlarını temizle ve filtrelenmiş verilerle yeniden doldur
+ 
         refineryClusterGroup.clearLayers();
         refineryClusterGroup.addLayer(L.geoJSON({type:"FeatureCollection", features:filteredRefineries}, {pointToLayer: refineryLayer.options.pointToLayer, onEachFeature: refineryLayer.options.onEachFeature}));
         
         portClusterGroup.clearLayers();
         portClusterGroup.addLayer(L.geoJSON({type:"FeatureCollection", features:filteredPorts}, {pointToLayer: portLayer.options.pointToLayer, onEachFeature: portLayer.options.onEachFeature}));
 
-        // 2. SADECE FİLTRELENMİŞ rafineri ve limanlardan bir koordinat haritası oluştur.
-        // Bu, boru hattı filtresinin sadece görünür olan noktalara göre çalışmasını sağlar.
+
         const coordToCountry = {};
         const coordToCompany = {};
         const allVisibleTerminals = [...filteredRefineries, ...filteredPorts];
@@ -379,13 +375,12 @@ async function initMap() {
             }
         });
 
-        // 3. Boru hatlarını, bu yeni ve doğru haritaya göre filtrele
+
         const filteredPipelines = pipelineData.features.filter(f => {
             const coords = f.geometry.coordinates;
             const startCoordKey = coords[0].join(',');
             const endCoordKey = coords[coords.length - 1].join(',');
             
-            // Bir boru hattı, sadece başlangıç VEYA bitiş noktası filtrelere uyan bir terminalde ise gösterilir.
             const countryMatch = selectedCountries.length === 0 || selectedCountries.includes(coordToCountry[startCoordKey]) || selectedCountries.includes(coordToCountry[endCoordKey]);
             const companyMatch = selectedCompanies.length === 0 || checkCompanyMatch(coordToCompany[startCoordKey], selectedCompanies) || checkCompanyMatch(coordToCompany[endCoordKey], selectedCompanies);
 
@@ -397,7 +392,6 @@ async function initMap() {
         
         updateUrlHash();
     }
-    // === GÜNCELLENMİŞ FONKSİYON SONU ===
 
     let updatingUrl = false;
     function updateUrlHash() {
