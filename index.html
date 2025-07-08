@@ -58,6 +58,13 @@
     #map {
         padding-top: 60px; 
     }
+    
+    /* === YENİ KURAL: Header'ın altındaki harita kontrollerini aşağı itmek için === */
+    .leaflet-top {
+        top: 70px; /* 60px header + 10px boşluk */
+    }
+    /* === YENİ KURAL BİTTİ === */
+
     /* HEADER STYLES END */
     
     .interactive-icon { transition: transform 0.2s ease-out, filter 0.2s ease-out; cursor: pointer; }
@@ -329,26 +336,68 @@ async function initMap() {
     
     document.getElementById('reset-filters-btn').addEventListener('click', () => { document.querySelectorAll('.country-checkbox:checked, .company-checkbox:checked').forEach(cb => cb.checked = false); slider.noUiSlider.set([minCapacity, maxCapacity]); applyFilters(); document.getElementById('filter-panel').style.display = 'none'; });
 
+    // =========================================================================
+    // === FİLTRELEME FONKSİYONU GÜNCELLENDİ (SORUN 1 VE 2'NİN ÇÖZÜMÜ) ===
+    // =========================================================================
     function applyFilters() {
         const selectedCountries = [...document.querySelectorAll('.country-checkbox:checked')].map(cb => cb.value);
         const selectedCompanies = [...document.querySelectorAll('.company-checkbox:checked')].map(cb => cb.value);
         const capacityRange = slider.noUiSlider.get();
-        const checkCompanyMatch = (ownerString, companies) => { if (companies.length === 0) return true; if (!ownerString) return false; return companies.some(company => new RegExp(`\\b${company.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i').test(ownerString)); };
-        const filteredRefineries = refineryData.features.filter(f => (selectedCountries.length === 0 || selectedCountries.includes(f.properties.country)) && (f.properties.capacity_bpd >= capacityRange[0] && f.properties.capacity_bpd <= capacityRange[1]) && checkCompanyMatch(f.properties.owner, selectedCompanies));
-        refineryClusterGroup.clearLayers(); refineryClusterGroup.addLayer(L.geoJSON({type:"FeatureCollection", features:filteredRefineries}, {pointToLayer: refineryLayer.options.pointToLayer, onEachFeature: refineryLayer.options.onEachFeature}));
-        const filteredPorts = portData.features.filter(f => selectedCountries.length === 0 || selectedCountries.includes(f.properties.country));
-        portClusterGroup.clearLayers(); portClusterGroup.addLayer(L.geoJSON({type:"FeatureCollection", features:filteredPorts}, {pointToLayer: portLayer.options.pointToLayer, onEachFeature: portLayer.options.onEachFeature}));
-        const coordToCountry = {}; const coordToCompany = {};
-        [...refineryData.features, ...portData.features].forEach(f => { const coordKey = f.geometry.coordinates.join(','); coordToCountry[coordKey] = f.properties.country; if (f.properties.owner) { coordToCompany[coordKey] = f.properties.owner; } });
+        const checkCompanyMatch = (ownerString, companies) => {
+            if (companies.length === 0) return true;
+            if (!ownerString) return false;
+            return companies.some(company => new RegExp(`\\b${company.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i').test(ownerString));
+        };
+
+        // 1. Önce rafinerileri ve limanları kendi özelliklerine göre filtrele
+        const filteredRefineries = refineryData.features.filter(f => 
+            (selectedCountries.length === 0 || selectedCountries.includes(f.properties.country)) &&
+            (f.properties.capacity_bpd >= capacityRange[0] && f.properties.capacity_bpd <= capacityRange[1]) &&
+            checkCompanyMatch(f.properties.owner, selectedCompanies)
+        );
+        const filteredPorts = portData.features.filter(f => 
+            selectedCountries.length === 0 || selectedCountries.includes(f.properties.country)
+        );
+
+        // Rafineri ve Liman katmanlarını temizle ve filtrelenmiş verilerle yeniden doldur
+        refineryClusterGroup.clearLayers();
+        refineryClusterGroup.addLayer(L.geoJSON({type:"FeatureCollection", features:filteredRefineries}, {pointToLayer: refineryLayer.options.pointToLayer, onEachFeature: refineryLayer.options.onEachFeature}));
+        
+        portClusterGroup.clearLayers();
+        portClusterGroup.addLayer(L.geoJSON({type:"FeatureCollection", features:filteredPorts}, {pointToLayer: portLayer.options.pointToLayer, onEachFeature: portLayer.options.onEachFeature}));
+
+        // 2. SADECE FİLTRELENMİŞ rafineri ve limanlardan bir koordinat haritası oluştur.
+        // Bu, boru hattı filtresinin sadece görünür olan noktalara göre çalışmasını sağlar.
+        const coordToCountry = {};
+        const coordToCompany = {};
+        const allVisibleTerminals = [...filteredRefineries, ...filteredPorts];
+        allVisibleTerminals.forEach(f => {
+            const coordKey = f.geometry.coordinates.join(',');
+            coordToCountry[coordKey] = f.properties.country;
+            if (f.properties.owner) {
+                coordToCompany[coordKey] = f.properties.owner;
+            }
+        });
+
+        // 3. Boru hatlarını, bu yeni ve doğru haritaya göre filtrele
         const filteredPipelines = pipelineData.features.filter(f => {
-            const coords = f.geometry.coordinates; const startCoordKey = coords[0].join(','); const endCoordKey = coords[coords.length - 1].join(',');
+            const coords = f.geometry.coordinates;
+            const startCoordKey = coords[0].join(',');
+            const endCoordKey = coords[coords.length - 1].join(',');
+            
+            // Bir boru hattı, sadece başlangıç VEYA bitiş noktası filtrelere uyan bir terminalde ise gösterilir.
             const countryMatch = selectedCountries.length === 0 || selectedCountries.includes(coordToCountry[startCoordKey]) || selectedCountries.includes(coordToCountry[endCoordKey]);
             const companyMatch = selectedCompanies.length === 0 || checkCompanyMatch(coordToCompany[startCoordKey], selectedCompanies) || checkCompanyMatch(coordToCompany[endCoordKey], selectedCompanies);
+
             return countryMatch && companyMatch;
         });
-        pipelineLayer.clearLayers(); pipelineLayer.addData({type: "FeatureCollection", features: filteredPipelines});
+
+        pipelineLayer.clearLayers();
+        pipelineLayer.addData({type: "FeatureCollection", features: filteredPipelines});
+        
         updateUrlHash();
     }
+    // === GÜNCELLENMİŞ FONKSİYON SONU ===
 
     let updatingUrl = false;
     function updateUrlHash() {
@@ -401,4 +450,3 @@ initMap();
 
 </body>
 </html>
-
